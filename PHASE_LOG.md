@@ -1,56 +1,18 @@
 # Phase Log
 
-## Phase 1 — Project Setup ✅ DONE
+## Phase 1 — App Skeleton & Health Check ✅
 
-### What was built
-- Clean, modular folder structure (`app/core`, `app/api`, `app/utils`, `tests`)
-- Environment variable handling via `.env` (never hardcoded secrets)
-- Centralized `Settings` class that validates config at startup
-- Centralized logging (console + `logs/app.log`)
-- Minimal FastAPI app with a `/health` endpoint
-- Global error handler (returns clean JSON instead of crashing or leaking a traceback)
-- One automated test file confirming the server + health endpoint work
+**Goal:** Stand up a minimal, production-structured FastAPI service with a
+health endpoint.
 
-### Exact commands
+**Delivered:**
+- FastAPI app skeleton (`app/main.py`).
+- Environment-based configuration (`app/config.py`) using
+  `pydantic-settings`, backed by `.env` (never hardcoded secrets).
+- `GET /health` returning `status`, `app_name`, `environment`, and
+  `config_warnings`.
 
-**1. Create and activate a virtual environment**
-```bash
-cd research-agent-system
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-```
-
-**2. Install dependencies**
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-**3. Set up environment variables**
-```bash
-cp .env.example .env
-# then open .env and paste your real OpenAI API key into OPENAI_API_KEY=
-```
-
-**4. Run the server**
-```bash
-uvicorn app.main:app --reload
-```
-Server will start at: `http://127.0.0.1:8000`
-
-### Testing Phase 1
-
-**A. Automated test**
-```bash
-python -m pytest tests/ -v
-```
-Expected: `2 passed`
-
-**B. Manual test (server running)**
-```bash
-curl http://127.0.0.1:8000/health
-```
-Expected response:
+**Verified output:**
 ```json
 {
   "status": "ok",
@@ -59,35 +21,67 @@ Expected response:
   "config_warnings": []
 }
 ```
-If `OPENAI_API_KEY` is missing from `.env`, `config_warnings` will list that
-problem — but the server still responds with `status: ok` and HTTP 200,
-because the server itself is healthy even if a later phase's dependency
-isn't configured yet.
-
-**C. Interactive API docs (FastAPI gives you this for free)**
-Open in a browser: `http://127.0.0.1:8000/docs`
-You should see the `/health` endpoint listed and be able to try it directly
-in the browser — useful for demonstrating the working backend in your viva.
-
-### What is working after Phase 1
-- Project runs with a single command
-- Config is loaded safely from `.env`, with no secrets in code
-- Logging writes to both console and `logs/app.log`
-- `/health` endpoint confirms the server and config are working
-- Unhandled errors return clean JSON instead of crashing the process
-- One passing automated test proves the above, not just "it looked fine when I ran it once"
 
 ---
 
-## Phase 2 — Multi-Agent Research (NEXT)
+## Phase 2 — Planner Agent ✅
 
-Planned work:
-- Add `app/agents/` package
-- Implement **Planner Agent**: topic → sub-questions, using OpenAI Agents SDK
-- Implement **Researcher Agent**: web search tool → claims + source snippets
-- Add a `POST /research` endpoint that accepts a topic and runs Planner → Researcher
-- Extend logging so every agent call (input/output/tool used) is traceable
-- Add tests for Planner and Researcher independently, using mocked LLM responses so tests don't require a live API key
+**Goal:** Given a research topic, produce a structured research plan via an
+LLM-backed Planner Agent.
 
-Phase 2 will NOT yet include: Fact Checker, Synthesizer, Report Generator, or the
-sufficiency-check loop — those are Phase 3.
+**Delivered:**
+- `app/models/research_plan.py` — Pydantic schema for `ResearchPlan`
+  (`topic`, `research_questions`, `subtopics`, `research_tasks`,
+  `evidence_requirements`, `recommended_source_types`, `priorities`), plus
+  request/response wrapper models.
+- `app/agents/planner_agent.py` — modular Planner Agent built with the
+  **OpenAI Agents SDK** (`Agent` + `Runner`), using `output_type=ResearchPlan`
+  so the SDK enforces structured output validated by Pydantic. Reads the
+  model name and API key from settings; never hardcodes the key.
+- `app/api/research.py` — `POST /research/plan` endpoint:
+  - Validates `topic` is present, non-empty/non-whitespace, and within
+    `MIN_TOPIC_LENGTH`–`MAX_TOPIC_LENGTH` bounds, with descriptive error
+    messages (`422`).
+  - Calls the Planner Agent and maps failures to `503` (missing/invalid
+    config) or `502` (any other Planner/OpenAI failure), logging each case.
+- Logging: structured, timestamped logging configured centrally
+  (`app/logging_config.py`) and used across config load, request handling,
+  and agent execution.
+- Tests (`tests/test_health.py`, `tests/test_planner.py`): 10 tests covering
+  `/health`, successful plan generation (Planner Agent mocked — no network
+  or API key needed to run the suite), whitespace trimming, all validation
+  error cases, and both `503`/`502` failure paths.
+- `README.md` and `.env.example` updated for setup, running, and testing
+  instructions.
+
+**Explicitly not implemented (future phases):** Web Researcher, Academic
+Researcher, News Agent, Fact Checker, Synthesizer, Report Generator, Oracle
+AI Database, Vector Search, MCP, ReAct, Human Approval.
+
+**How it was verified:**
+- `pytest -v` → 10/10 passing.
+- Manually started `uvicorn app.main:app` and exercised:
+  - `GET /health` → `200`, matches Phase 1 shape (plus `config_warnings`
+    populated when no key is set).
+  - `POST /research/plan` with no `OPENAI_API_KEY` configured → `503` with
+    a clear message.
+  - `POST /research/plan` with empty / whitespace / too-long `topic` →
+    `422` with descriptive messages.
+  - `GET /docs` → `200`, Swagger UI renders `POST /research/plan`.
+
+**Completion checklist:**
+- [x] `/research/plan` accepts `{"topic": "..."}` and returns a `plan` object
+      matching the `ResearchPlan` schema.
+- [x] Empty/too-short/too-long topics are rejected with clear `422` errors.
+- [x] No API key is hardcoded anywhere; missing key fails gracefully (`503`).
+- [x] Planner Agent is isolated in its own module (`app/agents/planner_agent.py`).
+- [x] Automated tests pass without requiring a real OpenAI API key.
+- [x] README and this log are up to date.
+
+---
+
+## Phase 3 — Not started
+
+Reserved for the next research-producing agents (Web Researcher, Academic
+Researcher, News Agent) per the project roadmap. Not implemented in this
+change.

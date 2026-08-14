@@ -1,19 +1,13 @@
-# Secrets
+# Environment / secrets
 .env
 
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+*.egg-info/
 .venv/
 venv/
-*.egg-info/
 
-# Logs and local data
-logs/*.log
-data/*.db
-data/*.sqlite3
-
-# Editors / OS
-.vscode/
-.idea/
+# OS
 .DS_Store
