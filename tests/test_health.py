@@ -1,0 +1,9 @@
+def test_health_returns_ok(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "app_name" in body
+    assert "environment" in body
+    assert isinstance(body["config_warnings"], list)
